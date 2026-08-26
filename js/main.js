@@ -42,12 +42,15 @@ async function enter() {
     await loadAll();
   } catch (e) {
     console.error(e);
-    renderScreen(`${statusBar('LINK FAILED')}
+    const root = renderScreen(`${statusBar('LINK FAILED')}
       <div class="grow" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px">
         <div class="h1 center" style="font-size:22px">LINK\nFAILED</div>
         <div class="center mono11 dim mt12" style="line-height:1.8">데이터베이스 연결에 실패했습니다.<br>Supabase 스키마(supabase/schema.sql)가 적용되었는지 확인하세요.<br><span class="alert">${(e && e.message) || e}</span></div>
         <button class="btn mt20" id="retry" style="width:auto;padding:12px 30px">RETRY ▸</button>
-      </div>`).querySelector('#retry').addEventListener('click', enter);
+        <button class="link-btn mt12" id="signout">⏻ SIGN OUT · 접속 화면으로</button>
+      </div>`);
+    root.querySelector('#retry').addEventListener('click', enter);
+    root.querySelector('#signout').addEventListener('click', () => sb.auth.signOut());
     return;
   }
   applyTheme();
