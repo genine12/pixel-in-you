@@ -3,6 +3,18 @@
 -- Supabase 대시보드 > SQL Editor 에서 이 파일 전체를 실행하세요.
 -- ============================================================
 
+-- ── API 역할 권한 부여 ───────────────────────────────────────
+-- 최근 Supabase 프로젝트는 anon/authenticated 역할에 public 스키마
+-- 접근 권한을 기본으로 주지 않으므로 명시적으로 부여해야 함
+-- (없으면 "permission denied for schema public" 오류 발생)
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;
+
 -- ── 프로필 (유저별 게임 상태) ─────────────────────────────────
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
