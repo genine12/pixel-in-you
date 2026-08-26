@@ -1,0 +1,17 @@
+{
+  "name": "PIXEL IN YOU",
+  "short_name": "PIXEL IN YOU",
+  "description": "우주 표류자가 매일 자신의 사진으로 지구의 신호를 복원하는 개인용 포토모자이크 퍼즐",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050503",
+  "theme_color": "#050503",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

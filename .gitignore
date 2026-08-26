@@ -1,0 +1,18 @@
+# 의존성 / 배포 부산물
+node_modules/
+.vercel/
+
+# 로컬 환경 파일 (현재 사용하지 않지만 실수 방지용)
+.env
+.env.*
+
+# 에디터 / OS
+.DS_Store
+Thumbs.db
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
+
+# 스포일러/기획 내부 전용 문서 — 공개 저장소에 커밋하지 않음
+ENDING_SPOILER.md
+supabase/ending-content.sql
