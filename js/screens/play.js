@@ -3,7 +3,7 @@ import { S, uid, theme, quotaInfo, ensureAssignment, commitCell, levelDone, next
 import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, tabBar, drawMasked, toast } from '../ui.js';
 import { spriteHTML, THEMES } from '../sprites.js';
-import { gridOf, levelsOf, seedOf, targetHSL, hslToHex, analyzePhoto, todayStr, untilMidnight, L_TOLERANCE, INK_PER_CELL } from '../game.js';
+import { gridOf, levelsOf, seedOf, targetHSL, hslToHex, analyzePhoto, todayStr, untilMidnight, L_TOLERANCE, INK_PER_CELL, colorMatch, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK } from '../game.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 
@@ -144,6 +144,13 @@ export function cellfillScreen() {
     const hex = hslToHex(t.h, t.s, t.l).toUpperCase();
     const coord = `R${pad2(assignment.y + 1)}·C${pad2(assignment.x + 1)}`;
 
+    // 색상 근접도 (분석 완료 후에만) — 통과와 무관한 소프트 지표
+    const sync = analysis ? colorMatch(analysis.hsl, t) : null;
+    const perfectSync = sync != null && sync >= COLOR_SYNC_BONUS_AT;
+    const syncLabel = step < 2 ? '—'
+      : sync == null ? 'N/A · 저채도'
+      : `${sync}%${perfectSync ? ' ◈ PERFECT' : ''}`;
+
     const intake = [
       ['DROP TODAY\'S PHOTO', '▸ TAP TO TRANSMIT'],
       ['EXTRACTING DOMINANT COLOR', '▚ SCANNING…'],
@@ -153,10 +160,10 @@ export function cellfillScreen() {
     const sampled = ['NONE', 'ANALYSING…', 'RECEIVED', 'RECEIVED'][step];
     const delta = ['AWAITING', 'SAMPLING…', deltaDir === 'dark' ? 'TOO DARK ▼' : 'TOO BRIGHT ▲', 'IN RANGE ✓'][step];
     const verdict = [
-      ['STANDBY', `목표 명도에 가까운 사진 한 장. 오늘 남은 셀 ${q.left}칸.`],
+      ['STANDBY', `목표 명도에 가까우면 통과 · 색조까지 맞추면 INK +${COLOR_BONUS_INK} 보너스. 오늘 남은 셀 ${q.left}칸.`],
       ['ANALYSING', '대표 색상 추출 중 — 이동하지 마시오.'],
       [deltaDir === 'dark' ? 'TOO DARK' : 'TOO BRIGHT', deltaDir === 'dark' ? '사진이 너무 어두워요. 조금 더 밝은 사진으로 다시 송신해 주세요.' : '사진이 너무 밝아요. 조금 더 어두운 사진으로 다시 송신해 주세요.'],
-      ['ACCEPTED', `${coord} 에 정착 준비 완료. 확정 시 듀오톤 봉인 적용, INK +${INK_PER_CELL} 지급.`],
+      ['ACCEPTED', `${coord} 에 정착 준비 완료. 확정 시 듀오톤 봉인 적용, INK +${INK_PER_CELL}${perfectSync ? ` +${COLOR_BONUS_INK} (COLOR SYNC ${sync}%)` : ''} 지급.`],
     ][step];
     const cta = ['TRANSMIT SPECIMEN ▸', 'ANALYSING ▚', 'RE-TRANSMIT ↺', 'CONFIRM & FILL CELL ▸'][step];
     const sprName = step === 2 ? 'buddySad' : step === 3 ? 'buddyHappy' : 'buddy';
@@ -174,6 +181,7 @@ export function cellfillScreen() {
           <div class="label">TARGET COLOR</div>
           <div style="height:36px;margin:7px 0;border:1px solid rgb(var(--ink-rgb)/.54);background:${hex}"></div>
           <div style="font:500 13px var(--mono)">${hex}</div>
+          <div class="dim" style="margin-top:5px;font:400 8.5px/1.5 var(--mono)">명도 = 통과<br>색조 = 잉크 보너스</div>
         </div>
       </div>
 
@@ -191,6 +199,8 @@ export function cellfillScreen() {
         <div class="mono11 dim" style="padding:0 11px 11px;line-height:1.75">
           <div>SPECIMEN &nbsp;${sampled}</div>
           <div>MATCH &nbsp;&nbsp;&nbsp;&nbsp;${delta}</div>
+          <div>C-SYNC &nbsp;&nbsp;<span style="${perfectSync ? 'color:var(--ink)' : ''}">${syncLabel}</span></div>
+          ${sync != null ? `<div class="minibar" style="margin-top:5px"><i style="width:${sync}%"></i></div>` : ''}
         </div>
       </div>
 
@@ -257,15 +267,17 @@ export function cellfillScreen() {
       try {
         const path = `${uid()}/${p.stage}-${p.level}-${assignment.x}-${assignment.y}.jpg`;
         if (analysis?.blob) await db.uploadPhoto(path, analysis.blob);
-        const { grants, note } = await commitCell({
+        const { grants, note, bonus } = await commitCell({
           x: assignment.x, y: assignment.y, targetHex: hex,
           photoPath: analysis?.blob ? path : null,
+          colorSync: sync,
         });
         if (note) toast(note);
-        grants.forEach((g, i) => setTimeout(() => toast('◈ ' + g), 800 * (i + 1)));
+        if (bonus) setTimeout(() => toast(`◈ PERFECT COLOR SYNC ${sync}% · INK +${bonus}`), 700);
+        grants.forEach((g, i) => setTimeout(() => toast('◈ ' + g), 800 * (i + 2)));
 
         if (levelDone()) { S.nav('reveal'); return; }
-        toast(`${coord} 정착 완료 · INK +${INK_PER_CELL}`);
+        toast(`${coord} 정착 완료 · INK +${INK_PER_CELL}${bonus ? ` +${bonus}` : ''}`);
         // 다음 셀 준비
         step = 0; analysis = null; deltaDir = null;
         if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }

@@ -8,7 +8,22 @@ export const STAGES = [
 export const QUOTA_BASE = 5;      // 하루 기본 제출 한도
 export const INK_PER_CELL = 40;   // 셀 정착 시 잉크
 export const STAGE_BONUS = 600;   // 스테이지 클리어 보너스
-export const L_TOLERANCE = 15;    // 명도 허용 오차 (HSL L, 0~100)
+export const L_TOLERANCE = 15;    // 명도 허용 오차 (HSL L, 0~100) — 통과 판정의 유일한 게이트
+
+// ── 소프트 색상 보너스 (통과에는 영향 없음, 잉크 보너스만) ──────
+export const COLOR_SYNC_MIN_SAT = 22;   // 사진·목표 둘 다 이 채도 이상일 때만 색조 근접도 계산
+export const COLOR_SYNC_BONUS_AT = 68;  // 이 % 이상이면 PERFECT SYNC
+export const COLOR_BONUS_INK = 20;      // PERFECT SYNC 시 추가 잉크
+
+// 사진 대표색(a)과 목표색(b)의 색상 근접도 0~100. 채도가 부족하면 null (색조가 불안정하므로 판정 제외)
+export function colorMatch(a, b) {
+  if (!a || !b || a.s < COLOR_SYNC_MIN_SAT || b.s < COLOR_SYNC_MIN_SAT) return null;
+  let dh = Math.abs(a.h - b.h) % 360;
+  if (dh > 180) dh = 360 - dh;
+  const hueSim = Math.max(0, 1 - dh / 90);              // 색조 0°→1.0, 90°+→0
+  const satSim = 1 - Math.min(Math.abs(a.s - b.s) / 60, 1);
+  return Math.round(100 * (0.82 * hueSim + 0.18 * satSim));
+}
 
 export const gridOf = stage => (STAGES[stage] || STAGES[3]).grid;
 export const levelsOf = stage => (STAGES[stage] || STAGES[3]).levels;

@@ -1,6 +1,6 @@
 // 앱 전역 상태 + 게임 진행 로직
 import * as db from './db.js';
-import { QUOTA_BASE, INK_PER_CELL, gridOf, todayStr, h } from './game.js';
+import { QUOTA_BASE, INK_PER_CELL, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK, gridOf, todayStr, h } from './game.js';
 import { THEMES } from './sprites.js';
 
 export const S = {
@@ -81,7 +81,7 @@ function streakPatch(p) {
 }
 
 // ── 셀 정착 처리 ─────────────────────────────────────────
-export async function commitCell({ x, y, targetHex, photoPath }) {
+export async function commitCell({ x, y, targetHex, photoPath, colorSync = null }) {
   const id = uid();
   const today = todayStr();
   const row = await db.insertCell({
@@ -91,14 +91,17 @@ export async function commitCell({ x, y, targetHex, photoPath }) {
   S.cells.push(row);
   S.recentDates.unshift(today);
 
+  // 소프트 색상 보너스 — 통과 판정과 무관, PERFECT SYNC 시 추가 잉크만
+  const bonus = (colorSync != null && colorSync >= COLOR_SYNC_BONUS_AT) ? COLOR_BONUS_INK : 0;
+
   const sp = streakPatch(S.profile);
   const patch = {
-    ink: (S.profile.ink || 0) + INK_PER_CELL,
+    ink: (S.profile.ink || 0) + INK_PER_CELL + bonus,
     assignment: null,
     ...(sp.patch || {}),
   };
   S.profile = await db.updateProfile(id, patch);
-  return { grants: sp.grants || [], note: sp.note };
+  return { grants: sp.grants || [], note: sp.note, bonus, colorSync };
 }
 
 // 레벨 완성 여부

@@ -197,7 +197,7 @@ export function shopScreen() {
   const root = renderScreen(`
     ${statusBar()}
     ${titleBar('REWARDS & SUPPLY', `STREAK ${streak}D`)}
-    <div class="grow" style="min-height:0;overflow-y:auto;padding-bottom:8px">
+    <div style="padding-bottom:8px">
       <div class="mx16 mt14 row panel" style="box-shadow:0 0 20px rgb(var(--ink-rgb)/.1)">
         <div class="grow pad" style="border-right:1px solid var(--line-soft)">
           <div class="label">COLOR INK</div>
@@ -334,7 +334,7 @@ export function settingsScreen() {
         <div class="swatches" style="margin-top:8px">${t.mix.map(c => `<i style="width:16px;height:16px;background:${c};box-shadow:0 0 8px ${c}66"></i>`).join('')}</div>
       </div>
     </div>
-    <div class="grow" style="min-height:0;overflow-y:auto;padding-bottom:8px">
+    <div style="padding-bottom:8px">
       <div class="mx16 mt14 label" style="letter-spacing:.24em">CONSOLE THEME · 언제든 변경 가능</div>
       ${themeCardsHTML()}
       <div class="mx16 mt14 label" style="letter-spacing:.24em">SOUND</div>
