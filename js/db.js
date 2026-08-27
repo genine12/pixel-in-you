@@ -91,6 +91,7 @@ export async function resetProgress(uid) {
   await sb.from('cells').delete().eq('user_id', uid);
   await sb.from('completions').delete().eq('user_id', uid);
   return updateProfile(uid, {
+    onboarded: false,
     stage: 0, level: 0, ink: 0, defense: 0, streak: 0, longest_streak: 0,
     last_active: null, special_pixels: 0, ending_seen: false,
     assignment: null, quota_bonus: null, settings: {}

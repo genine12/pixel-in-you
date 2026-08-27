@@ -59,6 +59,17 @@ export function renderScreen(inner, { halo = true } = {}) {
     <div class="content">${inner}</div>
     <div class="scanlines"></div><div class="vignette"></div>
   </div>`;
+
+  // 상단 크롬(statusbar + titlebar)을 스크롤과 분리된 고정 헤더로 묶기
+  const content = app().querySelector('.content');
+  const header = document.createElement('div');
+  header.className = 'chrome-top';
+  while (content.firstElementChild &&
+         /\b(statusbar|titlebar)\b/.test(content.firstElementChild.className || '')) {
+    header.appendChild(content.firstElementChild);
+  }
+  if (header.childElementCount) content.prepend(header);
+
   // 탭 네비게이션 바인딩
   app().querySelectorAll('[data-nav]').forEach(b =>
     b.addEventListener('click', () => S.nav(b.dataset.nav)));

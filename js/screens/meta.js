@@ -386,7 +386,7 @@ export function settingsScreen() {
     S.cells = []; S.recentDates = []; S.completions = [];
     applyTheme();
     toast('모든 진행이 초기화되었습니다');
-    S.nav('dashboard');
+    S.nav('onboarding');
   });
 
   root.querySelector('#signout').addEventListener('click', async () => {

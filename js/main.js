@@ -60,6 +60,10 @@ async function enter() {
 }
 
 async function init() {
+  // 핀치 확대 차단 (iOS Safari) — 고정 화면 유지
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('gesturechange', e => e.preventDefault());
+
   // 서비스워커 등록 (PWA)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
