@@ -211,7 +211,7 @@ export function cellfillScreen() {
         <div class="v-body">${verdict[1]}</div>
       </div>
 
-      ${step === 2 && (p.special_pixels || 0) > 0 ? `<button class="btn mx16 mt8" id="special" style="padding:11px;font-size:11.5px">◈ SPECIAL PIXEL 사용 (보유 ${p.special_pixels}) — 판정 면제</button>` : ''}
+      ${step === 2 && (p.special_pixels || 0) > 0 ? `<button class="btn mx16 mt8" id="special" style="width:auto;padding:11px;font-size:11.5px">◈ SPECIAL PIXEL 사용 (보유 ${p.special_pixels}) — 판정 면제</button>` : ''}
       <button class="btn ${step === 2 ? 'alert-btn' : ''}" id="cta" style="margin:12px 16px 8px;width:auto" ${step === 1 ? 'disabled' : ''}>${cta}</button>
       <button class="link-btn" id="reset" style="margin-bottom:18px">↺ RESET SEQUENCE</button>
       <input type="file" id="file" accept="image/*" style="display:none">

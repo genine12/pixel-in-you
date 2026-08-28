@@ -192,7 +192,7 @@ export function onboardingScreen() {
       </div>
       <div class="mx26 mt20 mono11" style="line-height:1.95;color:var(--ink)">${p.body}</div>
       <div class="mx26 mt12 mono11 dim" style="padding-left:11px;border-left:1px solid var(--line-strong);line-height:1.75">${p.note}</div>
-      <button class="btn mx26 mt12" id="next" style="margin-bottom:12px">${p.cta}</button>
+      <button class="btn mx26 mt12" id="next" style="margin-bottom:12px;width:auto">${p.cta}</button>
       <div class="center mono11 dim" style="letter-spacing:.16em;margin-bottom:30px">0${ob + 1} / 04${ob === 3 ? ' · 온보딩 완료' : ''}</div>
     `);
     root.querySelector('#skip').addEventListener('click', finish);

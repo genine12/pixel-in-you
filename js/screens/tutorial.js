@@ -72,43 +72,37 @@ export function tutorialScreen() {
 
     const root = renderScreen(`
       ${statusBar()}
-      ${titleBar('TUTORIAL SIGNAL', 'SALVAGED WRECK · 8×8')}
-      <div class="mx16 mt14 mono12" style="line-height:1.85">누군가 이 신호를 54칸까지 복원해두고 떠났다. 남은 조각은 열 개. 이제 당신 차례다.</div>
+      ${titleBar('TUTORIAL SIGNAL', `잔여 ${pad2(left)} / 10 · 8×8`)}
+      <div class="mx16 mt6 mono11" style="line-height:1.7">누군가 이 신호를 54칸까지 복원해두고 떠났다. 남은 조각은 열 개. 이제 당신 차례다.</div>
 
-      <div class="mx16 mt14 row" style="align-items:center;gap:12px">
-        <div class="grow" style="height:1px;background:var(--line-soft)"></div>
-        <div style="font:700 22px var(--mono);letter-spacing:.06em;color:var(--bright);text-shadow:0 0 10px rgb(var(--ink-rgb)/.6)">${pad2(left)} / 10</div>
-        <div class="mono11 dim" style="letter-spacing:.14em">FRAGMENTS LEFT</div>
-      </div>
-
-      <div class="mx16 mt12 panel" style="padding:9px;box-shadow:0 0 24px rgb(var(--ink-rgb)/.12)">${tutGridHTML(done)}</div>
-      <div class="mx16 mt8 row" style="gap:14px">
+      <div class="panel" style="padding:8px;max-width:min(264px, 30vh);width:calc(100% - 32px);margin:8px auto 0;box-shadow:0 0 24px rgb(var(--ink-rgb)/.12)">${tutGridHTML(done)}</div>
+      <div class="row" style="gap:12px;justify-content:center;margin-top:4px">
         <span class="mono11 dim" style="opacity:.6">▪ 선채움 54</span>
         <span class="mono11" style="color:var(--ink)">▪ 내가 채운 ${done}</span>
         <span class="mono11" style="color:var(--bright)">◻ 남은 칸</span>
       </div>
 
-      <div class="mx16 mt14 panel">
-        <div class="panel-head">배정된 칸 · 목표 색상</div>
-        <div class="pad">
+      <div class="mx16 mt8 panel">
+        <div class="panel-head" style="padding:5px 11px">배정된 칸 · 목표 색상</div>
+        <div style="padding:9px 12px">
           <div id="swatch" style="cursor:pointer">
           ${previewURL
-            ? `<div style="height:64px;background-image:url('${previewURL}');background-size:cover;background-position:center;border:1px solid rgb(var(--bright-rgb)/.5);${step === 2 ? 'filter:grayscale(.6) brightness(.7)' : ''}"></div>`
-            : `<div style="height:44px;background:${target.hex};box-shadow:0 0 18px ${target.hex}88;border:1px solid rgb(var(--bright-rgb)/.5)"></div>`}
+            ? `<div style="height:46px;background-image:url('${previewURL}');background-size:cover;background-position:center;border:1px solid rgb(var(--bright-rgb)/.5);${step === 2 ? 'filter:grayscale(.6) brightness(.7)' : ''}"></div>`
+            : `<div style="height:32px;background:${target.hex};box-shadow:0 0 18px ${target.hex}88;border:1px solid rgb(var(--bright-rgb)/.5)"></div>`}
           </div>
-          <div class="row" style="justify-content:space-between;align-items:baseline;margin-top:9px">
+          <div class="row" style="justify-content:space-between;align-items:baseline;margin-top:7px">
             <span style="font:500 12px var(--mono);letter-spacing:.08em;color:var(--bright)">${target.name} · R${pad2(target.y + 1)}·C${pad2(target.x + 1)}</span>
             <span class="mono11 dim">${target.hex} · L ${Math.round(tL)}</span>
           </div>
-          <div class="mono11 dim" style="margin-top:6px;line-height:1.7">${step === 3
-            ? '정착 전에 위 미리보기를 다시 터치하면 다른 사진으로 교체할 수 있습니다.'
-            : '이 색과 비슷한 밝기의 사진을 찾아 송신하세요. 조금 달라도 신호는 받아들입니다.'}</div>
+          <div class="mono11 dim" style="margin-top:4px;line-height:1.6">${step === 3
+            ? '정착 전에 미리보기를 다시 터치하면 사진을 교체할 수 있습니다.'
+            : '이 색과 비슷한 밝기의 사진을 송신하세요. 조금 달라도 됩니다.'}</div>
         </div>
       </div>
 
       <div class="grow"></div>
-      <div class="mx16 mono11 dim" style="margin-bottom:9px;letter-spacing:.14em">▸ ${statusLine} · 쿼터 미적용</div>
-      <button class="btn mx16 ${step === 2 ? 'alert-btn' : ''}" id="cta" style="margin-bottom:24px;width:auto" ${step === 1 ? 'disabled' : ''}>${cta}</button>
+      <div class="mx16 mono11 dim" style="margin-bottom:5px;letter-spacing:.14em">▸ ${statusLine} · 쿼터 미적용</div>
+      <button class="btn mx16 ${step === 2 ? 'alert-btn' : ''}" id="cta" style="margin-bottom:10px;width:auto;padding:12px" ${step === 1 ? 'disabled' : ''}>${cta}</button>
       <input type="file" id="file" accept="image/*" style="display:none">
     `);
 
