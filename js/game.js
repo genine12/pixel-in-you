@@ -1,14 +1,56 @@
 // 게임 규칙 · 프로시저럴 타깃 이미지 · 색상 유틸
 export const STAGES = [
-  { grid: 8,  levels: 3 },   // 스테이지 1
+  { grid: 8,  levels: 2 },   // 스테이지 1 — 빠른 성취 후 16x16으로 승급
   { grid: 16, levels: 2 },   // 스테이지 2
   { grid: 32, levels: 1 },   // 스테이지 3
   { grid: 64, levels: 1 },   // 스테이지 4 (엔드게임, 클리어 후 반복)
 ];
-export const QUOTA_BASE = 5;      // 하루 기본 제출 한도
+export const QUOTA_BASE = 30;     // 하루 기본 제출 한도 (PRD 2.4)
 export const INK_PER_CELL = 40;   // 셀 정착 시 잉크
 export const STAGE_BONUS = 600;   // 스테이지 클리어 보너스
 export const L_TOLERANCE = 15;    // 명도 허용 오차 (HSL L, 0~100) — 통과 판정의 유일한 게이트
+
+// ── 튜토리얼 (PRD 2.2 / 3.1) — 54칸 선채움 8x8, 유저는 10칸만 채움 ──
+// 완성본은 알아볼 수 있는 고정 픽셀 아트(하트) — 유저의 10칸이 하트의 중심부를 완성한다
+export const TUT_TOLERANCE = 20;         // 튜토리얼은 판정을 살짝 관대하게
+const TUT_MAP = [                        // f=하트 본체 h=테두리 .=우주 배경
+  '........',
+  '.hh..hh.',
+  'hffhhffh',
+  'hffffffh',
+  '.hffffh.',
+  '..hffh..',
+  '...hh...',
+  '........',
+];
+// 유저가 채울 10칸 (y*8+x) — 전부 하트 위, 심장 중심부
+export const TUT_HOLES = [18, 21, 25, 27, 30, 34, 36, 43, 44, 51];
+
+// 튜토리얼 칸의 목표 색 (HSL) — 좌상단 광원 기반 음영 + 색조 시프트로 입체감
+// 스펙큘러(흰 반짝임) → 쨍한 핫핑크 → 깊고 선명한 자주, 배경엔 흰빛 별
+export function tutCellHSL(x, y) {
+  const ch = TUT_MAP[y][x];
+  const v = h(x, y, 5) - .5;             // 셀별 미세 변주 (결정적)
+  if (ch === 'f' || ch === 'h') {
+    const d = Math.hypot(x - 2.1, y - 2.4) / 5.2;  // 광원 거리 0(밝음)~1(어두움)
+    // 광원 코어: 거의 흰색에 가까운 반짝임 픽셀
+    if (ch === 'f' && d < .17) return { h: 344 + v * 6, s: 30 + v * 10, l: 90 + v * 3 };
+    const t = Math.min(1, d + (ch === 'h' ? .16 : 0)); // 테두리는 한 단계 그늘지게
+    return {
+      h: (349 - 34 * t + v * 5 + 360) % 360,       // 핫핑크 → 자주
+      s: 90 - 8 * t + v * 5,                        // 전 구간 쨍하게 (90→82)
+      l: 78 - 48 * t + v * 3,                       // 78 → 30
+    };
+  }
+  // 배경: 딥 스페이스 — 어두운 비네트 위에 흰빛 별 반짝임 (하트와 대비)
+  const r = Math.hypot(x - 3.5, y - 3.6) / 4.9;    // 중심 0 → 모서리 1
+  if (h(x, y, 23) > .9) return { h: 250 + v * 30, s: 18 + v * 10, l: 58 + 18 * h(x, y, 41) }; // 별
+  return { h: 252 + 18 * r + v * 10, s: 42 - 10 * r + v * 6, l: 13 - 6 * r + v * 2.5 };
+}
+
+// ── 중간 마일스톤 (16x16 이상, 25/50/75% 도달 시) ──────────
+export const MILESTONE_PCTS = [25, 50, 75];
+export const MILESTONE_INK = { 25: 100, 50: 200, 75: 300 };
 
 // ── 소프트 색상 보너스 (통과에는 영향 없음, 잉크 보너스만) ──────
 export const COLOR_SYNC_MIN_SAT = 22;   // 사진·목표 둘 다 이 채도 이상일 때만 색조 근접도 계산

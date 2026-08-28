@@ -3,7 +3,7 @@ import { S, uid, theme, levelCycles, nextMilestone } from '../store.js';
 import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, tabBar, drawTargetColors, applyTheme, toast } from '../ui.js';
 import { spriteHTML, THEMES, themeUnlocked } from '../sprites.js';
-import { gridOf, levelsOf, seedOf, STAGES } from '../game.js';
+import { gridOf, levelsOf, seedOf, targetHSL, STAGES } from '../game.js';
 import { loadLevelImages, drawMosaic } from './story.js';
 
 const pad2 = v => String(v).padStart(2, '0');
@@ -91,53 +91,240 @@ export function archiveScreen() {
     }));
 }
 
-// ── 아카이브 상세 (완성 레벨 뷰어 + EXPORT) ────────────────
+// ── 아카이브 상세 = 리빌 모자이크 뷰 (디자인 2d) ────────────
+// 틴트 전환 (ART 100% / REVEAL 70% / PHOTOS 35%) + 셀 탭 → 상세 시트
+const TINTS = [
+  { k: 'ART',    v: 1,   label: 'ART · 순수 그림',  desc: '틴트 100% — 지구가 보낸 이미지 그대로' },
+  { k: 'REVEAL', v: .7,  label: 'REVEAL · 드러남',  desc: '틴트 70% — 셀 아래 사진들이 배어 나온다' },
+  { k: 'PHOTOS', v: .35, label: 'PHOTOS · 내 사진', desc: '틴트 35% — 그림은 결국 당신의 하루들이었다' },
+];
+
 export function archiveViewScreen({ stage = 0, level = 0 } = {}) {
+  const n = gridOf(stage);
+  const seed = seedOf(stage, level);
+  let imgs = null;
+  let cellsByKey = new Map(); // y*10000+x → {cell, img}
+  let ti = 1;                 // 기본 REVEAL
+  let sel = null;             // {x, y}
+
+  const draw = () => {
+    if (S.screen !== 'archiveView') return;
+    const tint = TINTS[ti];
+    const entry = sel ? cellsByKey.get(sel.y * 10000 + sel.x) : null;
+
+    const sheetHTML = sel ? `
+      <div class="mx16 mt12 cell-sheet" id="sheet">
+        <div class="sheet-head">
+          <span style="font:700 11px var(--mono);letter-spacing:.14em;color:var(--ink)">CELL DETAIL · R${pad2(sel.y + 1)}·C${pad2(sel.x + 1)}</span>
+          <button id="closeSheet" class="mono11 dim" style="cursor:pointer">✕</button>
+        </div>
+        <div class="pad row" style="gap:11px;align-items:flex-start">
+          <canvas id="shOrig" width="96" height="96" style="width:72px;height:72px;flex:none;border:1px solid rgb(var(--bright-rgb)/.5)"></canvas>
+          <canvas id="shTint" width="96" height="96" style="width:72px;height:72px;flex:none;border:1px solid rgb(var(--ink-rgb)/.5)"></canvas>
+          <div class="grow mono11 dim" style="min-width:0;line-height:1.8">
+            <div style="color:var(--bright);font-weight:500">${entry?.cell?.fill_date || '—'}</div>
+            <div>ORIGINAL / TINTED</div>
+            <div>내가 올린 사진</div>
+          </div>
+        </div>
+      </div>` : '';
+
+    const root = renderScreen(`
+      ${statusBar()}
+      ${titleBar('REVEAL MOSAIC', `S${stage + 1} · L${level + 1} · ${n}×${n} · ${n * n} CELLS`, 'back')}
+      <div style="padding:14px 18px 0" class="row" >
+        <span style="font:500 12.5px var(--mono);letter-spacing:.1em;color:var(--bright)">${tint.label}</span>
+        <span class="grow"></span>
+        <span class="mono11 dim">TINT ${Math.round(tint.v * 100)}%</span>
+      </div>
+      <div class="mosaic-wrap mx16" style="margin-top:11px;padding:5px">
+        <canvas id="viewcv" class="gridcv" width="${Math.min(1024, n * 32)}" height="${Math.min(1024, n * 32)}"></canvas>
+      </div>
+      <div class="mx16 mt12 segtabs" id="tints">
+        ${TINTS.map((t, i) => `<button class="${i === ti ? 'on' : ''}" data-ti="${i}">${t.k}</button>`).join('')}
+      </div>
+      <div class="mx16 mt8 mono11 dim" style="line-height:1.75">${tint.desc}</div>
+      <div class="mx16 mt8 mono11 dim" id="status">${imgs ? `${imgs.length} FRAGMENTS · REVEALED` : 'FRAGMENT PHOTOS LOADING ▚'}</div>
+      ${sheetHTML}
+      <div class="grow"></div>
+      <div class="mx16 row" style="gap:8px;margin-bottom:10px">
+        <button class="btn grow" id="export" style="padding:13px;width:auto">EXPORT ▸</button>
+        <button class="grow" id="back2" style="border:1px solid var(--line-strong);padding:13px;text-align:center;font:500 11.5px var(--mono);letter-spacing:.14em;color:var(--dim)">아카이브</button>
+      </div>
+      <div class="center mono11 dim" style="letter-spacing:.12em;margin-bottom:8px;font-size:10px">셀을 탭하면 그날의 사진을 볼 수 있습니다</div>
+      ${tabBar('archive')}
+    `);
+    root.querySelector('.tb-back').addEventListener('click', () => S.nav('archive'));
+    root.querySelector('#back2').addEventListener('click', () => S.nav('archive'));
+    root.querySelector('#export').addEventListener('click', () => S.nav('export', { stage, level }));
+    root.querySelectorAll('[data-ti]').forEach(b => b.addEventListener('click', () => { ti = +b.dataset.ti; draw(); }));
+    root.querySelector('#closeSheet')?.addEventListener('click', () => { sel = null; draw(); });
+
+    const cv = root.querySelector('#viewcv');
+    if (imgs) drawMosaic(cv, n, seed, imgs, 'color', null, tint.v);
+    else drawTargetColors(cv, n, seed);
+
+    // 셀 탭 → 상세 시트
+    cv.addEventListener('click', e => {
+      const r = cv.getBoundingClientRect();
+      const x = Math.floor((e.clientX - r.left) / r.width * n);
+      const y = Math.floor((e.clientY - r.top) / r.height * n);
+      if (x < 0 || y < 0 || x >= n || y >= n) return;
+      sel = { x, y };
+      draw();
+    });
+
+    // 상세 시트의 원본/틴트 썸네일
+    if (sel && entry) {
+      const t = targetHSL(sel.x, sel.y, n, seed);
+      const targetCss = `hsl(${t.h.toFixed(0)} ${t.s.toFixed(0)}% ${t.l.toFixed(0)}%)`;
+      const o = root.querySelector('#shOrig')?.getContext('2d');
+      const tc = root.querySelector('#shTint')?.getContext('2d');
+      if (o && tc) {
+        if (entry.img) { o.drawImage(entry.img, 0, 0, 96, 96); tc.drawImage(entry.img, 0, 0, 96, 96); }
+        else { o.fillStyle = targetCss; o.fillRect(0, 0, 96, 96); }
+        tc.globalAlpha = tint.v; tc.fillStyle = targetCss; tc.fillRect(0, 0, 96, 96);
+      }
+    }
+  };
+
+  draw();
+  db.fetchCells(uid(), stage, level).then(cells => loadLevelImages(cells)).then(loaded => {
+    if (S.screen !== 'archiveView') return;
+    imgs = loaded;
+    cellsByKey = new Map(loaded.map(e => [e.cell.y * 10000 + e.cell.x, e]));
+    draw();
+  }).catch(() => {
+    const st = document.querySelector('#status');
+    if (st) st.textContent = 'PHOTO LOAD FAILED · 목표 색상으로 표시 중';
+  });
+}
+
+// ── 프리미엄 EXPORT (디자인 2f) — 포스터/엽서 레이아웃 ──────
+const EXPORT_KINDS = [
+  { k: 'POSTER',   sub: '포스터', ratio: '2:3 · 610×915mm',  w: 2048, h: 3072 },
+  { k: 'POSTCARD', sub: '엽서',   ratio: 'A6 · 105×148mm',   w: 1240, h: 1748 },
+];
+
+export function exportScreen({ stage = 0, level = 0 } = {}) {
   const p = S.profile;
   const n = gridOf(stage);
   const seed = seedOf(stage, level);
-  const exportUnlocked = (p.longest_streak || 0) >= 100 || !!p.settings?.premiumExport;
+  const free = (p.longest_streak || 0) >= 100 || !!p.settings?.premiumExport;
+  const comp = S.completions.find(c => c.stage === stage && c.level === level);
+  let kind = 0;
   let imgs = null;
+  let dateRange = '—';
 
-  const root = renderScreen(`
-    ${statusBar()}
-    ${titleBar('RESTORED SIGNAL', `S${stage + 1} · L${level + 1} · ${n}×${n}`, 'back')}
-    <div class="mosaic-wrap mt16 mx16">
-      <canvas id="viewcv" class="gridcv" width="${Math.min(1024, n * 32)}" height="${Math.min(1024, n * 32)}"></canvas>
-    </div>
-    <div class="mx16 mt12 mono11 dim" id="status">FRAGMENT PHOTOS LOADING ▚</div>
-    <div class="grow"></div>
-    <button class="btn mx16" id="export" style="margin-bottom:10px;width:auto" ${exportUnlocked ? '' : 'disabled'}>${exportUnlocked ? '◈ EXPORT · 고화질 PNG 저장' : 'EXPORT LOCKED · 100일 스트릭 또는 프리미엄'}</button>
-    ${tabBar('archive')}
-  `);
-  root.querySelector('.tb-back').addEventListener('click', () => S.nav('archive'));
+  const draw = () => {
+    if (S.screen !== 'export') return;
+    const ek = EXPORT_KINDS[kind];
+    const gate = free
+      ? { title: 'PREMIUM EXPORT · UNLOCKED', badge: '100D 달성', body: '100일 연속 참여 보상으로 활성화되었습니다. 워터마크 없이 원본 해상도로 저장됩니다.', cta: '고화질로 저장하기 ▸', foot: `PNG ${ek.w}×${ek.h} · 무료` }
+      : { title: 'PREMIUM EXPORT · LOCKED', badge: `${p.streak || 0} / 100D`, body: `100일 연속 참여로 무료 획득하거나, 결제해 바로 사용할 수 있습니다. 현재 스트릭 ${p.streak || 0}일.`, cta: '₩4,900 결제하고 저장 ▸', foot: `또는 ${Math.max(0, 100 - (p.streak || 0))}일 더 연속 참여하면 무료` };
+    const accent = free ? 'var(--ink)' : '#A594F9';
 
-  const cv = root.querySelector('#viewcv');
-  drawTargetColors(cv, n, seed); // 사진 로드 전 임시
+    const root = renderScreen(`
+      ${statusBar()}
+      ${titleBar('PREMIUM EXPORT', `S${stage + 1} · L${level + 1} · ${n}×${n} · REVEALED`, 'back')}
+      <div class="mx16 mt12 segtabs">
+        ${EXPORT_KINDS.map((k, i) => `<button class="${i === kind ? 'on' : ''}" data-k="${i}">${k.k}</button>`).join('')}
+      </div>
 
-  db.fetchCells(uid(), stage, level).then(cells => loadLevelImages(cells)).then(loaded => {
-    if (S.screen !== 'archiveView') return; // 화면 이탈 후 늦은 렌더 방지
-    imgs = loaded;
-    drawMosaic(cv, n, seed, imgs, 'color');
-    root.querySelector('#status').textContent = `${imgs.length} FRAGMENTS · REVEALED`;
-  }).catch(() => { root.querySelector('#status').textContent = 'PHOTO LOAD FAILED · 목표 색상으로 표시 중'; });
+      <div class="mx16 mt12 grow" style="min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid rgb(var(--ink-rgb)/.28);background:#08080a;padding:14px;overflow:hidden">
+        <div style="width:214px;background:#FBFFDF;color:#050503;padding:16px 16px 14px;box-shadow:0 14px 40px rgba(0,0,0,.7)">
+          <canvas id="prevcv" width="${n * 16}" height="${n * 16}" style="display:block;width:100%;image-rendering:pixelated"></canvas>
+          <div style="margin-top:13px;font:700 13px var(--mono);letter-spacing:.16em">PIXEL IN YOU</div>
+          <div style="font:400 10px var(--mono);letter-spacing:.1em;color:#5A5C46;margin-top:4px">STAGE ${pad2(stage + 1)} · LEVEL ${pad2(level + 1)} · ${n}×${n} · ${n * n} CELLS</div>
+          <div style="font:400 10px var(--mono);letter-spacing:.1em;color:#5A5C46">${dateRange} · ${comp?.cycles || '?'} CYCLES</div>
+          <div style="margin-top:9px;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid rgba(5,5,3,.2);padding-top:7px">
+            <span style="font:400 10px var(--mono);color:#5A5C46">OPERATOR ${p.operator || '—'}</span>
+            <span style="font:700 10px var(--mono);letter-spacing:.14em">${ek.k}</span>
+          </div>
+        </div>
+      </div>
+      <div class="mx16 mt8 row" style="justify-content:space-between">
+        <span class="mono11 dim">${ek.sub} 레이아웃</span><span class="mono11 dim">${ek.ratio}</span>
+      </div>
 
-  root.querySelector('#export').addEventListener('click', () => {
-    if (!exportUnlocked) return;
+      <div class="mx16 mt12 panel pad" style="border-color:${accent};box-shadow:0 0 20px ${free ? 'rgb(var(--ink-rgb)/.16)' : 'rgba(165,148,249,.2)'}">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:9px">
+          <span style="font:700 11px var(--mono);letter-spacing:.14em;color:var(--bright)">${gate.title}</span>
+          <span style="font:700 10px var(--mono);letter-spacing:.12em;padding:3px 7px;${free ? 'background:var(--ink);color:var(--bg)' : 'color:#A594F9;border:1px solid #6F5FC9'}">${gate.badge}</span>
+        </div>
+        <div class="mono11 dim" style="margin-top:7px;line-height:1.8">${gate.body}</div>
+      </div>
+
+      <button class="btn mx16" id="cta" style="margin-top:12px;margin-bottom:8px;width:auto;border-color:${accent};box-shadow:0 0 22px ${free ? 'rgb(var(--ink-rgb)/.3)' : 'rgba(165,148,249,.34)'}">${gate.cta}</button>
+      <div class="center mono11 dim" style="letter-spacing:.12em;margin-bottom:24px">${gate.foot}</div>
+    `);
+    root.querySelector('.tb-back').addEventListener('click', () => S.nav('archiveView', { stage, level }));
+    root.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { kind = +b.dataset.k; draw(); }));
+
+    const prev = root.querySelector('#prevcv');
+    if (imgs) drawMosaic(prev, n, seed, imgs, 'color', null, .72);
+    else drawTargetColors(prev, n, seed);
+
+    root.querySelector('#cta').addEventListener('click', () => {
+      if (!free) { toast('결제는 준비 중입니다 — 100일 스트릭으로도 해금할 수 있어요'); return; }
+      exportPNG();
+    });
+  };
+
+  // 고해상도 포스터/엽서 PNG 저장
+  const exportPNG = () => {
+    const ek = EXPORT_KINDS[kind];
     const out = document.createElement('canvas');
-    const px = Math.max(16, Math.floor(2048 / n));
-    out.width = out.height = px * n;
-    if (imgs) drawMosaic(out, n, seed, imgs, 'color');
-    else drawTargetColors(out, n, seed);
+    out.width = ek.w; out.height = ek.h;
+    const g = out.getContext('2d');
+    g.fillStyle = '#FBFFDF'; g.fillRect(0, 0, ek.w, ek.h);
+
+    const margin = Math.round(ek.w * .08);
+    const artW = ek.w - margin * 2;
+    const art = document.createElement('canvas');
+    const px = Math.max(8, Math.floor(artW / n));
+    art.width = art.height = px * n;
+    if (imgs) drawMosaic(art, n, seed, imgs, 'color', null, .72);
+    else drawTargetColors(art, n, seed);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(art, margin, margin, artW, artW);
+
+    // 하단 메타 텍스트
+    g.fillStyle = '#050503';
+    const fs = Math.round(ek.w * .032);
+    g.font = `700 ${fs}px 'JetBrains Mono', monospace`;
+    let ty = margin + artW + Math.round(ek.w * .07);
+    g.fillText('PIXEL IN YOU', margin, ty);
+    g.font = `400 ${Math.round(fs * .62)}px 'JetBrains Mono', monospace`;
+    g.fillStyle = '#5A5C46';
+    ty += Math.round(fs * .95);
+    g.fillText(`STAGE ${pad2(stage + 1)} · LEVEL ${pad2(level + 1)} · ${n}×${n} · ${n * n} CELLS`, margin, ty);
+    ty += Math.round(fs * .8);
+    g.fillText(`${dateRange} · ${comp?.cycles || '?'} CYCLES · OPERATOR ${p.operator || '—'}`, margin, ty);
+
     out.toBlob(blob => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `pixel-in-you_S${stage + 1}L${level + 1}.png`;
+      a.download = `pixel-in-you_S${stage + 1}L${level + 1}_${EXPORT_KINDS[kind].k.toLowerCase()}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('EXPORT 완료 — 다운로드 폴더를 확인하세요');
     }, 'image/png');
-  });
+  };
+
+  draw();
+  db.fetchCells(uid(), stage, level).then(cells => {
+    const dates = cells.map(c => c.fill_date).filter(Boolean).sort();
+    if (dates.length) {
+      const f = d => d.replaceAll('-', '.');
+      dateRange = `${f(dates[0])} — ${f(dates[dates.length - 1])}`;
+    }
+    return loadLevelImages(cells);
+  }).then(loaded => {
+    if (S.screen !== 'export') return;
+    imgs = loaded;
+    draw();
+  }).catch(() => {});
 }
 
 // ── 테마 카드 (상점/설정 공용) ─────────────────────────────
@@ -353,7 +540,7 @@ export function settingsScreen() {
         <div style="font:700 12.5px var(--mono);letter-spacing:.16em">RESET PROGRESS</div>
         <div style="font:400 10px/1.7 var(--mono);margin-top:4px;opacity:.82">모든 스테이지 진행률과 복원된 조각이 삭제됩니다. 되돌릴 수 없습니다.</div>
       </div>
-      <button class="link-btn mx16 mt12" id="signout" style="margin-bottom:14px">⏻ SIGN OUT · 접속 종료</button>
+      <button class="link-btn mx16 mt12" id="signout" style="margin-bottom:14px">⏻ ${db.isGuest() ? 'EXIT GUEST · 게스트 종료' : 'SIGN OUT · 접속 종료'}</button>
     </div>
     ${tabBar('settings')}
   `);
@@ -390,7 +577,8 @@ export function settingsScreen() {
   });
 
   root.querySelector('#signout').addEventListener('click', async () => {
-    const { sb } = await import('../db.js');
+    const { sb, isGuest, exitGuestMode } = await import('../db.js');
+    if (isGuest()) { exitGuestMode(); location.reload(); return; }
     await sb.auth.signOut();
   });
 }

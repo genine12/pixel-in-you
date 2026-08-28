@@ -1,15 +1,18 @@
 // 앱 진입점 — 라우팅 · 인증 상태 · 서비스워커 등록
-import { sb } from './db.js';
+import { sb, isGuest } from './db.js';
 import { S, loadAll, levelDone } from './store.js';
 import { applyTheme, renderScreen, statusBar, toast } from './ui.js';
 import { bootScreen, onboardingScreen } from './screens/auth.js';
 import { dashboardScreen, cellfillScreen, starmapScreen } from './screens/play.js';
-import { archiveScreen, archiveViewScreen, shopScreen, settingsScreen } from './screens/meta.js';
-import { revealScreen, promoScreen } from './screens/story.js';
+import { archiveScreen, archiveViewScreen, shopScreen, settingsScreen, exportScreen } from './screens/meta.js';
+import { revealScreen, promoScreen, teaserScreen } from './screens/story.js';
+import { tutorialScreen, tutorialRevealScreen } from './screens/tutorial.js';
 
 const SCREENS = {
   boot: bootScreen,
   onboarding: onboardingScreen,
+  tutorial: tutorialScreen,
+  tutorialReveal: tutorialRevealScreen,
   dashboard: dashboardScreen,
   cellfill: cellfillScreen,
   starmap: starmapScreen,
@@ -17,8 +20,10 @@ const SCREENS = {
   archiveView: archiveViewScreen,
   shop: shopScreen,
   settings: settingsScreen,
+  export: exportScreen,
   reveal: revealScreen,
   promo: promoScreen,
+  teaser: teaserScreen,
 };
 
 S.nav = (screen, params = {}) => {
@@ -50,11 +55,20 @@ async function enter() {
         <button class="link-btn mt12" id="signout">⏻ SIGN OUT · 접속 화면으로</button>
       </div>`);
     root.querySelector('#retry').addEventListener('click', enter);
-    root.querySelector('#signout').addEventListener('click', () => sb.auth.signOut());
+    root.querySelector('#signout').addEventListener('click', async () => {
+      if (isGuest()) { const { exitGuestMode } = await import('./db.js'); exitGuestMode(); location.reload(); return; }
+      sb.auth.signOut();
+    });
     return;
   }
   applyTheme();
-  if (!S.profile.onboarded) S.nav('onboarding');
+  if (!S.profile.onboarded) {
+    // 스토리 → 튜토리얼(10칸) → 튜토리얼 리빌 순서로 재진입 지점 복원
+    const st = S.profile.settings || {};
+    if (!st.obStory) S.nav('onboarding');
+    else if ((st.tut?.done || 0) >= 10) S.nav('tutorialReveal');
+    else S.nav('tutorial');
+  }
   else if (levelDone()) S.nav('reveal'); // 마지막 셀을 채우고 종료했던 경우 리빌 재진입
   else S.nav('dashboard');
 }
@@ -68,10 +82,18 @@ async function init() {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
+  // 게스트 모드 — 로그인 없이 즉시 시작 (데이터는 이 기기에만 저장)
+  if (isGuest()) {
+    S.session = { user: { id: 'guest' } };
+    enter();
+    return;
+  }
+
   const { data: { session } } = await sb.auth.getSession();
   S.session = session;
 
   sb.auth.onAuthStateChange((event, sess) => {
+    if (isGuest()) return;
     const had = !!S.session;
     S.session = sess;
     if (event === 'SIGNED_IN' && !had) enter();

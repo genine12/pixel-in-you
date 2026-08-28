@@ -264,6 +264,54 @@ canvas.gridcv { display: block; width: 100%; image-rendering: pixelated; }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ── 튜토리얼 그리드 ──────────────────────────────── */
+.tutgrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.tutgrid i { aspect-ratio: 1; display: block; }
+
+/* ── 세그먼트 탭 (틴트/EXPORT 전환) ─────────────────── */
+.segtabs { display: flex; border: 1px solid var(--line-strong); background: var(--panel); }
+.segtabs button {
+  flex: 1; text-align: center; padding: 10px 0; cursor: pointer;
+  font: 500 11px var(--mono); letter-spacing: .1em; color: var(--dim);
+  border-right: 1px solid rgb(var(--ink-rgb) / .28);
+}
+.segtabs button:last-child { border-right: none; }
+.segtabs button.on { background: var(--ink); color: var(--bg); font-weight: 700; }
+
+/* ── 마일스톤 오버레이 (화면 재렌더에도 유지되도록 body 고정) ── */
+.ms-dim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .62); }
+.ms-modal {
+  position: fixed; left: 50%; top: 22%; transform: translateX(-50%);
+  width: min(390px, calc(100vw - 40px)); z-index: 31;
+  border: 1px solid var(--ink); background: var(--panel);
+  box-shadow: 0 0 44px rgb(var(--ink-rgb) / .3);
+}
+.ms-modal .ms-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 12px; background: var(--ink); color: var(--bg);
+  font: 700 11px var(--mono); letter-spacing: .16em;
+}
+
+/* ── 셀 상세 시트 (모자이크 뷰) ─────────────────────── */
+.cell-sheet { border: 1px solid var(--ink); background: var(--panel); box-shadow: 0 0 26px rgb(var(--ink-rgb) / .2); }
+.cell-sheet .sheet-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 11px; border-bottom: 1px solid var(--line);
+}
+
+/* ── 티저 글리치 그리드 ────────────────────────────── */
+.teaser-wrap { position: relative; border: 1px solid rgb(165 148 249 / .5); padding: 6px; box-shadow: 0 0 30px rgb(165 148 249 / .18); }
+.teaser-wrap .bands {
+  position: absolute; inset: 6px; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.55) 0 3px, rgba(0,0,0,0) 3px 7px);
+}
+.teaser-wrap .overlay-label {
+  position: absolute; inset: 6px; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 12px var(--mono); letter-spacing: .3em; color: var(--bright);
+  text-shadow: 0 0 12px rgba(0,0,0,.9);
+}
+
 /* ── 유틸 ────────────────────────────────────────── */
 .row { display: flex; }
 .gap8 { gap: 8px; } .gap12 { gap: 12px; }

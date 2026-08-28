@@ -1,6 +1,6 @@
 // 앱 전역 상태 + 게임 진행 로직
 import * as db from './db.js';
-import { QUOTA_BASE, INK_PER_CELL, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK, gridOf, todayStr, h } from './game.js';
+import { QUOTA_BASE, INK_PER_CELL, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK, MILESTONE_PCTS, MILESTONE_INK, gridOf, todayStr, h } from './game.js';
 import { THEMES } from './sprites.js';
 
 export const S = {
@@ -84,6 +84,7 @@ function streakPatch(p) {
 export async function commitCell({ x, y, targetHex, photoPath, colorSync = null }) {
   const id = uid();
   const today = todayStr();
+  const before = S.cells.length;
   const row = await db.insertCell({
     user_id: id, stage: S.profile.stage, level: S.profile.level,
     x, y, target_hex: targetHex, photo_path: photoPath, fill_date: today,
@@ -94,14 +95,55 @@ export async function commitCell({ x, y, targetHex, photoPath, colorSync = null 
   // 소프트 색상 보너스 — 통과 판정과 무관, PERFECT SYNC 시 추가 잉크만
   const bonus = (colorSync != null && colorSync >= COLOR_SYNC_BONUS_AT) ? COLOR_BONUS_INK : 0;
 
+  // 중간 마일스톤 (16x16 이상 · 25/50/75% 최초 통과 시) — PRD Open Item 반영
+  const n = gridOf(S.profile.stage);
+  let milestone = null;
+  const settingsMs = { ...(S.profile.settings || {}) };
+  if (n >= 16) {
+    const total = n * n;
+    const pctBefore = before / total * 100, pctAfter = S.cells.length / total * 100;
+    const seen = { ...(settingsMs.msSeen || {}) };
+    for (const p of MILESTONE_PCTS) {
+      const key = `${S.profile.stage}-${S.profile.level}-${p}`;
+      if (pctBefore < p && pctAfter >= p && !seen[key]) {
+        seen[key] = true;
+        milestone = { pct: p, ink: MILESTONE_INK[p], filled: S.cells.length, total };
+        break; // 한 번에 하나만 연출
+      }
+    }
+    if (milestone) settingsMs.msSeen = seen;
+  }
+
   const sp = streakPatch(S.profile);
   const patch = {
-    ink: (S.profile.ink || 0) + INK_PER_CELL + bonus,
+    ink: (S.profile.ink || 0) + INK_PER_CELL + bonus + (milestone?.ink || 0),
     assignment: null,
     ...(sp.patch || {}),
   };
+  // streakPatch 의 settings 와 msSeen 병합
+  if (milestone) patch.settings = { ...(patch.settings || settingsMs), msSeen: settingsMs.msSeen };
   S.profile = await db.updateProfile(id, patch);
-  return { grants: sp.grants || [], note: sp.note, bonus, colorSync };
+  return { grants: sp.grants || [], note: sp.note, bonus, colorSync, milestone };
+}
+
+// ── 튜토리얼 상태 (profile.settings.tut) ──────────────────
+export function tutState() {
+  const t = S.profile?.settings?.tut || {};
+  return { done: t.done || 0, photos: t.photos || [] };
+}
+
+export async function commitTutCell(photoPath) {
+  const t = tutState();
+  const settings = { ...(S.profile.settings || {}) };
+  settings.tut = { done: t.done + 1, photos: [...t.photos, photoPath] };
+  S.profile = await db.updateProfile(uid(), { settings });
+  return settings.tut;
+}
+
+// 온보딩 스토리 완료 표시 (튜토리얼 진입 전)
+export async function markStorySeen() {
+  const settings = { ...(S.profile.settings || {}), obStory: true };
+  S.profile = await db.updateProfile(uid(), { settings });
 }
 
 // 레벨 완성 여부

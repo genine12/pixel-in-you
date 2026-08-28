@@ -1,6 +1,6 @@
 // 부트(접속) 화면 + 온보딩
-import { sb, updateProfile } from '../db.js';
-import { S, uid } from '../store.js';
+import { sb, updateProfile, enterGuestMode } from '../db.js';
+import { S, uid, markStorySeen } from '../store.js';
 import { renderScreen, statusBar, toast, esc } from '../ui.js';
 import { spriteHTML } from '../sprites.js';
 import { h, lum } from '../game.js';
@@ -46,15 +46,18 @@ export function bootScreen() {
         <button class="btn mt12" id="go" type="submit">${mode === 'login' ? 'ACCESS ▸' : 'CREATE OPERATOR ▸'}</button>
       </form>
       <button class="link-btn mx26 mt8" id="switch">${mode === 'login' ? '신규 오퍼레이터 등록 ▸' : '◂ 기존 오퍼레이터로 접속'}</button>
+      <button class="mx26 mt8" id="guest" style="display:block;width:auto;border:1px dashed rgb(var(--ink-rgb)/.44);padding:11px;text-align:center;font:500 11.5px var(--mono);letter-spacing:.16em;color:var(--ink)">▸ 로그인 없이 시작해보기 — GUEST MODE</button>
+      <div class="mx26 mono11 dim" style="margin-top:5px;font-size:9px;text-align:center">게스트 데이터는 이 기기에만 저장됩니다</div>
       <div class="mx26 mono11 dim mt8">
         <div>[✓] 4 STAGES · 8×8 → 64×64 GRID</div>
-        <div>[✓] LIGHTNESS MATCH · 하루 5칸</div>
+        <div>[✓] LIGHTNESS MATCH · 하루 30칸</div>
         <div>[✓] NO DEADLINE · 진행률 소멸 없음</div>
       </div>
       <div class="mx26 mono11 dim flicker" style="margin-top:10px;margin-bottom:30px">&gt; AWAITING HANDSHAKE<span class="blink">█</span></div>
     `);
 
     root.querySelector('#switch').addEventListener('click', () => { mode = mode === 'login' ? 'signup' : 'login'; draw(); });
+    root.querySelector('#guest').addEventListener('click', () => { enterGuestMode(); location.reload(); });
     root.querySelector('#authform').addEventListener('submit', async e => {
       e.preventDefault();
       const email = root.querySelector('#email').value.trim();
@@ -114,7 +117,7 @@ const OB_PAGES = [
     kicker: 'DAILY SALVAGE', title: '하루에 몇 조각씩\n회수한다', panel: 'RECOVERY GRID · LVL 01 · 8×8',
     body: '매일 배정된 좌표에 그 색을 가진 당신의 사진을 송신한다. 색이 맞으면 조각은 정착하고, 신호는 그만큼 복원된다.',
     note: '복원이 끝날 때까지 무엇이 오고 있는지는 알 수 없다. 그래서 계속 회수한다.',
-    metaL: 'QUOTA 5 / CYCLE', metaR: 'LIGHTNESS ±15', cta: 'CONTINUE ▸', spr: 'probe',
+    metaL: 'QUOTA 30 / CYCLE', metaR: 'LIGHTNESS ±15', cta: 'CONTINUE ▸', spr: 'probe',
   },
   {
     kicker: 'RETURN VECTOR', title: '복원된 신호는\n귀환 좌표가 된다', panel: 'PLOTTED COURSE · EARTH · 0.41 AU',
@@ -160,8 +163,9 @@ export function onboardingScreen() {
   let ob = 0;
 
   const finish = async () => {
-    S.profile = await updateProfile(uid(), { onboarded: true });
-    S.nav('dashboard');
+    // 스토리 완료 → 실전형 튜토리얼로 (onboarded 는 튜토리얼 리빌에서 설정)
+    await markStorySeen();
+    S.nav('tutorial');
   };
 
   const draw = () => {

@@ -3,7 +3,7 @@ import { S, uid, theme, quotaInfo, ensureAssignment, commitCell, levelDone, next
 import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, tabBar, drawMasked, toast } from '../ui.js';
 import { spriteHTML, THEMES } from '../sprites.js';
-import { gridOf, levelsOf, seedOf, targetHSL, hslToHex, analyzePhoto, todayStr, untilMidnight, L_TOLERANCE, INK_PER_CELL, colorMatch, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK } from '../game.js';
+import { gridOf, levelsOf, seedOf, targetHSL, hslToHex, analyzePhoto, todayStr, untilMidnight, L_TOLERANCE, INK_PER_CELL, colorMatch, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK, lum } from '../game.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 
@@ -61,7 +61,9 @@ export function dashboardScreen() {
     <div class="mx16 mt16" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="panel pad">
         <div class="label">SESSION QUOTA</div>
-        <div class="qcells" style="margin:9px 0 7px">${[...Array(q.total)].map((_, i) => `<i class="${i < q.used ? 'on' : ''}"></i>`).join('')}</div>
+        <div style="margin:9px 0 7px;height:13px;border:1px solid rgb(var(--ink-rgb)/.54);position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${Math.min(100, q.used / q.total * 100).toFixed(1)}%;background:var(--ink);box-shadow:0 0 9px rgb(var(--ink-rgb)/.6)"></div>
+        </div>
         <div class="glow" style="font:500 15px var(--mono)">${q.left}<span style="font-size:11px;color:var(--dim)"> / ${q.total} CELLS</span></div>
         <div class="mono11 dim" style="margin-top:3px">RESET AT MIDNIGHT · ${untilMidnight()}</div>
       </div>
@@ -155,7 +157,7 @@ export function cellfillScreen() {
       ['DROP TODAY\'S PHOTO', '▸ TAP TO TRANSMIT'],
       ['EXTRACTING DOMINANT COLOR', '▚ SCANNING…'],
       [`SPECIMEN · ${analysis?.sizeMB || '?'}MB`, '◇ COLOR MISMATCH'],
-      [`SPECIMEN · ${analysis?.sizeMB || '?'}MB`, '◈ MATCH LOCKED'],
+      [`SPECIMEN · ${analysis?.sizeMB || '?'}MB`, '◈ MATCH LOCKED · 재터치로 교체 가능'],
     ][step];
     const sampled = ['NONE', 'ANALYSING…', 'RECEIVED', 'RECEIVED'][step];
     const delta = ['AWAITING', 'SAMPLING…', deltaDir === 'dark' ? 'TOO DARK ▼' : 'TOO BRIGHT ▲', 'IN RANGE ✓'][step];
@@ -217,7 +219,8 @@ export function cellfillScreen() {
 
     root.querySelector('.tb-back').addEventListener('click', () => S.nav('dashboard'));
     const fileEl = root.querySelector('#file');
-    const pick = () => { if (step === 0 || step === 2) fileEl.click(); };
+    // 통과(3) 상태에서도 인테이크 재터치로 재선택 허용 — 컨펌 전 교체 기회
+    const pick = () => { if (!busy && step !== 1) fileEl.click(); };
     root.querySelector('#intake').addEventListener('click', pick);
     root.querySelector('#reset').addEventListener('click', () => {
       if (busy) return;
@@ -267,7 +270,7 @@ export function cellfillScreen() {
       try {
         const path = `${uid()}/${p.stage}-${p.level}-${assignment.x}-${assignment.y}.jpg`;
         if (analysis?.blob) await db.uploadPhoto(path, analysis.blob);
-        const { grants, note, bonus } = await commitCell({
+        const { grants, note, bonus, milestone } = await commitCell({
           x: assignment.x, y: assignment.y, targetHex: hex,
           photoPath: analysis?.blob ? path : null,
           colorSync: sync,
@@ -277,6 +280,7 @@ export function cellfillScreen() {
         grants.forEach((g, i) => setTimeout(() => toast('◈ ' + g), 800 * (i + 2)));
 
         if (levelDone()) { S.nav('reveal'); return; }
+        if (milestone) showMilestone(milestone, n, seed);
         toast(`${coord} 정착 완료 · INK +${INK_PER_CELL}${bonus ? ` +${bonus}` : ''}`);
         // 다음 셀 준비
         step = 0; analysis = null; deltaDir = null;
@@ -310,6 +314,59 @@ export function cellfillScreen() {
 
   ensureAssignment().then(a => { assignment = a; draw(); }).catch(e => toast('배정 실패: ' + e.message));
   draw();
+}
+
+// ── 중간 마일스톤 오버레이 (디자인 2e) — 25/50/75% 도달 시 ──
+const MS_COPY = {
+  25: '신호의 4분의 1이\n복원되었다',
+  50: '신호의 절반이\n복원되었다',
+  75: '신호의 4분의 3이\n복원되었다',
+};
+
+function showMilestone(ms, n, seed) {
+  const dim = document.createElement('div');
+  dim.className = 'ms-dim';
+  const modal = document.createElement('div');
+  modal.className = 'ms-modal';
+  modal.innerHTML = `
+    <div class="ms-head"><span>MILESTONE · ${ms.pct}%</span><span>◈ +${ms.ink}</span></div>
+    <div style="padding:16px 14px">
+      <div style="font:700 20px/1.25 var(--mono);letter-spacing:.02em;color:var(--bright);white-space:pre-line;text-shadow:0 0 10px rgb(var(--ink-rgb)/.5)">${MS_COPY[ms.pct] || ''}</div>
+      <div class="mono11 dim" style="margin-top:9px;line-height:1.8">노이즈가 한 겹 걷혔습니다. 형체가 조금 더 또렷해집니다. · ${ms.filled} / ${ms.total} CELLS</div>
+      <div style="margin-top:13px;display:flex;gap:10px;align-items:center">
+        <canvas id="msBlur" width="96" height="96" style="width:80px;height:80px;flex:none;filter:blur(1.4px);image-rendering:pixelated;box-shadow:inset 0 0 0 1px rgb(var(--ink-rgb)/.2)"></canvas>
+        <div style="font:400 12px var(--mono);color:var(--ink)">▸</div>
+        <canvas id="msSharp" width="96" height="96" style="width:80px;height:80px;flex:none;image-rendering:pixelated;box-shadow:0 0 18px rgb(var(--ink-rgb)/.3)"></canvas>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+        <button class="btn grow" id="msOk" style="padding:11px;width:auto">확인</button>
+        <span class="mono11 dim">3초 후 닫힘</span>
+      </div>
+    </div>`;
+  document.body.appendChild(dim);
+  document.body.appendChild(modal);
+
+  // 흐림 → 또렷 프리뷰 (여전히 명도 블록 — 원본은 리빌 전까지 봉인)
+  const filled = new Set(S.cells.map(c => c.y * 10000 + c.x));
+  const blurCv = modal.querySelector('#msBlur');
+  const sharpCv = modal.querySelector('#msSharp');
+  drawMasked(blurCv, n, seed, filled);
+  const g = sharpCv.getContext('2d');
+  const t = theme();
+  const [ir, ig, ib] = t.ink.replace('#', '').match(/../g).map(v => parseInt(v, 16));
+  g.fillStyle = t.bg; g.fillRect(0, 0, 96, 96);
+  const px = 96 / n;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    // 전체 실루엣을 살짝 더 또렷하게 보여주는 보상 프리뷰 (여전히 단색 봉인)
+    const a = .12 + .66 * lum(x, y, n, seed);
+    g.fillStyle = `rgba(${ir},${ig},${ib},${a.toFixed(3)})`;
+    g.fillRect(x * px, y * px, Math.ceil(px), Math.ceil(px));
+  }
+
+  const close = () => { dim.remove(); modal.remove(); };
+  modal.querySelector('#msOk').addEventListener('click', close);
+  dim.addEventListener('click', close);
+  setTimeout(close, 3000);
 }
 
 // ── 스타맵 ───────────────────────────────────────────────
