@@ -4,6 +4,7 @@ import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, drawPromo, toast } from '../ui.js';
 import { spriteHTML } from '../sprites.js';
 import { gridOf, levelsOf, seedOf, targetHSL, STAGE_BONUS, h, lum } from '../game.js';
+import { sfx } from '../audio.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 const SEAL_FILTER = 'grayscale(1) sepia(.62) hue-rotate(14deg) brightness(.72) contrast(.95)';
@@ -102,6 +103,7 @@ export function revealScreen() {
       if (!revealed) {
         // 리빌 애니메이션: 빛이 위→아래로 훑고 지나가며 원색 전환
         animating = true;
+        sfx.play('reveal');
         root.querySelector('#sweep').style.display = 'block';
         const dur = 2400, t0 = performance.now();
         const tick = now => {

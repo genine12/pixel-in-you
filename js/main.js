@@ -7,6 +7,7 @@ import { dashboardScreen, cellfillScreen, starmapScreen } from './screens/play.j
 import { archiveScreen, archiveViewScreen, shopScreen, settingsScreen, exportScreen } from './screens/meta.js';
 import { revealScreen, promoScreen, teaserScreen } from './screens/story.js';
 import { tutorialScreen, tutorialRevealScreen } from './screens/tutorial.js';
+import { bgm, sfx } from './audio.js';
 
 const SCREENS = {
   boot: bootScreen,
@@ -62,6 +63,9 @@ async function enter() {
     return;
   }
   applyTheme();
+  bgm.setTrack(S.profile.settings?.snd?.track ?? 0);   // 저장된 테마/음량 반영
+  bgm.setLevel(S.profile.settings?.snd?.bgm ?? 3);
+  sfx.setLevel(S.profile.settings?.snd?.sfx ?? 4);
   if (!S.profile.onboarded) {
     // 스토리 → 튜토리얼(10칸) → 튜토리얼 리빌 순서로 재진입 지점 복원
     const st = S.profile.settings || {};
@@ -76,6 +80,11 @@ async function enter() {
 async function init() {
   // 핀치 확대 차단 (iOS Safari) — 고정 화면 유지
   document.addEventListener('gesturestart', e => e.preventDefault());
+
+  // 첫 사용자 제스처에서 오디오 컨텍스트 해제 (브라우저 자동재생 정책)
+  const armAudio = () => bgm.arm();
+  document.addEventListener('pointerdown', armAudio, { once: true });
+  document.addEventListener('keydown', armAudio, { once: true });
 
   // 서비스워커 등록 (PWA)
   if ('serviceWorker' in navigator) {

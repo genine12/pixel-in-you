@@ -88,6 +88,11 @@ input { font-family: var(--mono); -webkit-user-select: auto; user-select: auto; 
 .tb-fill { flex: 1; }
 .tb-right { padding: 7px 11px; font: 400 11.5px var(--mono); letter-spacing: .1em; color: var(--dim); align-self: center; }
 .tb-back { padding: 7px 11px; font: 400 11.5px var(--mono); letter-spacing: .12em; color: var(--dim); }
+.tb-skip {
+  padding: 7px 11px; font: 500 11.5px var(--mono); letter-spacing: .14em;
+  color: var(--dim); border-left: 1px solid var(--line-soft); flex: none;
+}
+.tb-skip:active { background: var(--ink); color: var(--bg); }
 
 /* ── 하단 탭바 ────────────────────────────────────── */
 .tabbar {
@@ -267,6 +272,16 @@ canvas.gridcv { display: block; width: 100%; image-rendering: pixelated; }
 /* ── 튜토리얼 그리드 ──────────────────────────────── */
 .tutgrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
 .tutgrid i { aspect-ratio: 1; display: block; }
+/* 튜토리얼 본화면 그리드 프레임 — 화면 높이에 맞춰 최대한 크게 */
+.tutgrid-wrap {
+  padding: 8px; width: calc(100% - 32px);
+  max-width: min(100%, 46vh);
+  margin: 10px auto 0;
+  box-shadow: 0 0 24px rgb(var(--ink-rgb) / .12);
+}
+/* 튜토리얼 하단 여백 배분 — 버튼이 바닥에 붙지 않도록 */
+.tut-gap-top { flex: 1 1 auto; max-height: 58px; }
+.tut-gap-bottom { flex: 1.4 1 auto; min-height: calc(14px + env(safe-area-inset-bottom)); }
 
 /* ── 세그먼트 탭 (틴트/EXPORT 전환) ─────────────────── */
 .segtabs { display: flex; border: 1px solid var(--line-strong); background: var(--panel); }

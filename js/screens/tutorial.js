@@ -3,6 +3,7 @@ import { S, uid, tutState, commitTutCell } from '../store.js';
 import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, toast } from '../ui.js';
 import { hslToHex, analyzePhoto, tutCellHSL, TUT_HOLES, TUT_TOLERANCE } from '../game.js';
+import { sfx } from '../audio.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 const holeOrder = i => TUT_HOLES.indexOf(i);
@@ -46,6 +47,43 @@ function tutGridHTML(done) {
   return `<div class="tutgrid">${cells}</div>`;
 }
 
+// ── SKIP 확인 오버레이 ────────────────────────────────────
+function askSkip() {
+  if (document.getElementById('skip-ov')) return;
+  const ov = document.createElement('div');
+  ov.id = 'skip-ov';
+  ov.innerHTML = `
+    <div class="ms-dim"></div>
+    <div class="ms-modal">
+      <div class="ms-head"><span>SKIP TUTORIAL</span><span id="skip-x" style="cursor:pointer;padding:0 2px">✕</span></div>
+      <div style="padding:14px 14px 13px">
+        <div class="mono12" style="line-height:1.85">튜토리얼을 건너뛰고 바로 시작할까요?<br><span class="dim">복원 연출은 다시 볼 수 없습니다. 지금까지 채운 조각은 그대로 남습니다.</span></div>
+        <div class="row gap8 mt14">
+          <button class="btn" id="skip-no" style="flex:1;padding:11px;font-size:11.5px;letter-spacing:.14em">◂ 계속하기</button>
+          <button class="btn" id="skip-yes" style="flex:1;padding:11px;font-size:11.5px;letter-spacing:.14em">건너뛰기 ▸</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('.ms-dim').addEventListener('click', close);
+  ov.querySelector('#skip-no').addEventListener('click', close);
+  ov.querySelector('#skip-x').addEventListener('click', close);
+  ov.querySelector('#skip-yes').addEventListener('click', async () => {
+    const btn = ov.querySelector('#skip-yes');
+    btn.disabled = true; btn.textContent = 'SKIPPING ▚';
+    try {
+      S.profile = await db.updateProfile(uid(), { onboarded: true });
+      close();
+      toast('튜토리얼을 건너뛰었습니다 — 당신의 첫 신호로');
+      S.nav('dashboard');
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '건너뛰기 ▸';
+      toast('건너뛰기 실패: ' + (e.message || e), 3600);
+    }
+  });
+}
+
 // ── 튜토리얼 본 화면 (2a) ─────────────────────────────────
 export function tutorialScreen() {
   const t = tutState();
@@ -72,11 +110,11 @@ export function tutorialScreen() {
 
     const root = renderScreen(`
       ${statusBar()}
-      ${titleBar('TUTORIAL SIGNAL', `잔여 ${pad2(left)} / 10 · 8×8`)}
-      <div class="mx16 mt6 mono11" style="line-height:1.7">누군가 이 신호를 54칸까지 복원해두고 떠났다. 남은 조각은 열 개. 이제 당신 차례다.</div>
+      ${titleBar('TUTORIAL SIGNAL', `잔여 ${pad2(left)} / 10`, null, '<button class="tb-skip" id="skip">SKIP ▸</button>')}
+      <div class="mx16 mono11" style="margin-top:6px;line-height:1.65">누군가 이 신호를 54칸까지 복원해두고 떠났다. 남은 조각은 열 개. 이제 당신 차례다.</div>
 
-      <div class="panel" style="padding:8px;max-width:min(264px, 30vh);width:calc(100% - 32px);margin:8px auto 0;box-shadow:0 0 24px rgb(var(--ink-rgb)/.12)">${tutGridHTML(done)}</div>
-      <div class="row" style="gap:12px;justify-content:center;margin-top:4px">
+      <div class="panel tutgrid-wrap">${tutGridHTML(done)}</div>
+      <div class="row" style="gap:12px;justify-content:center;margin-top:6px">
         <span class="mono11 dim" style="opacity:.6">▪ 선채움 54</span>
         <span class="mono11" style="color:var(--ink)">▪ 내가 채운 ${done}</span>
         <span class="mono11" style="color:var(--bright)">◻ 남은 칸</span>
@@ -100,11 +138,14 @@ export function tutorialScreen() {
         </div>
       </div>
 
-      <div class="grow"></div>
-      <div class="mx16 mono11 dim" style="margin-bottom:5px;letter-spacing:.14em">▸ ${statusLine} · 쿼터 미적용</div>
-      <button class="btn mx16 ${step === 2 ? 'alert-btn' : ''}" id="cta" style="margin-bottom:10px;width:auto;padding:12px" ${step === 1 ? 'disabled' : ''}>${cta}</button>
+      <div class="tut-gap-top"></div>
+      <div class="mx16 mono11 dim" style="margin-bottom:6px;letter-spacing:.14em">▸ ${statusLine} · 쿼터 미적용</div>
+      <button class="btn mx16 ${step === 2 ? 'alert-btn' : ''}" id="cta" style="width:auto;padding:13px" ${step === 1 ? 'disabled' : ''}>${cta}</button>
+      <div class="tut-gap-bottom"></div>
       <input type="file" id="file" accept="image/*" style="display:none">
     `);
+
+    root.querySelector('#skip').addEventListener('click', () => { if (!busy) askSkip(); });
 
     const fileEl = root.querySelector('#file');
     // 통과(3) 상태에서도 재선택 허용 — 컨펌 전 교체 기회
@@ -117,6 +158,7 @@ export function tutorialScreen() {
       if (previewURL) URL.revokeObjectURL(previewURL);
       previewURL = URL.createObjectURL(file);
       step = 1; draw();
+      sfx.play('scan');
       try {
         analysis = await analyzePhoto(file);
         const diff = analysis.hsl.l - tL;
@@ -125,7 +167,7 @@ export function tutorialScreen() {
       } catch (e) {
         step = 0; toast('이미지를 분석할 수 없습니다: ' + (e.message || e));
       }
-      setTimeout(draw, 700);
+      setTimeout(() => { sfx.play(step === 3 ? 'ok' : step === 2 ? 'reject' : 'error'); draw(); }, 700);
     });
 
     root.querySelector('#cta').addEventListener('click', async () => {
@@ -141,11 +183,13 @@ export function tutorialScreen() {
         const tut = await commitTutCell(analysis?.blob ? path : null);
         if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }
         step = 0; analysis = null; deltaDir = null; busy = false;
+        sfx.play('commit');
         if (tut.done >= 10) { S.nav('tutorialReveal'); return; }
         toast(`조각 정착 완료 · ${10 - tut.done}칸 남음`);
         draw();
       } catch (e) {
         busy = false;
+        sfx.play('error');
         toast('전송 실패: ' + (e.message || e), 4000);
         btn.disabled = false; btn.textContent = 'CONFIRM & FILL ▸';
       }
@@ -202,6 +246,7 @@ export function tutorialRevealScreen() {
   const animateReveal = () => {
     const grid = document.querySelector('#grid .tutgrid');
     if (!grid) return;
+    sfx.play('reveal');
     grid.style.transformOrigin = `${FOCUS.x.toFixed(1)}% ${FOCUS.y.toFixed(1)}%`;
     grid.style.transition = 'transform .9s cubic-bezier(.3,0,.2,1)';
     grid.style.transform = 'scale(2.1)';

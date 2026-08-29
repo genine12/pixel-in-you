@@ -4,6 +4,7 @@ import * as db from '../db.js';
 import { renderScreen, statusBar, titleBar, tabBar, drawMasked, toast } from '../ui.js';
 import { spriteHTML, THEMES } from '../sprites.js';
 import { gridOf, levelsOf, seedOf, targetHSL, hslToHex, analyzePhoto, todayStr, untilMidnight, L_TOLERANCE, INK_PER_CELL, colorMatch, COLOR_SYNC_BONUS_AT, COLOR_BONUS_INK, lum } from '../game.js';
+import { sfx } from '../audio.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 
@@ -242,6 +243,7 @@ export function cellfillScreen() {
       if (previewURL) URL.revokeObjectURL(previewURL);
       previewURL = URL.createObjectURL(file);
       step = 1; draw();
+      sfx.play('scan');
       try {
         const res = await analyzePhoto(file);
         analysis = res;
@@ -257,7 +259,7 @@ export function cellfillScreen() {
         step = 0; toast('이미지를 분석할 수 없습니다: ' + (e.message || e));
       }
       // 최소 스캔 연출 시간
-      setTimeout(draw, 900);
+      setTimeout(() => { sfx.play(step === 3 ? 'ok' : step === 2 ? 'reject' : 'error'); draw(); }, 900);
     });
 
     root.querySelector('#cta').addEventListener('click', async () => {
@@ -279,6 +281,7 @@ export function cellfillScreen() {
         if (bonus) setTimeout(() => toast(`◈ PERFECT COLOR SYNC ${sync}% · INK +${bonus}`), 700);
         grants.forEach((g, i) => setTimeout(() => toast('◈ ' + g), 800 * (i + 2)));
 
+        sfx.play('commit');
         if (levelDone()) { S.nav('reveal'); return; }
         if (milestone) showMilestone(milestone, n, seed);
         toast(`${coord} 정착 완료 · INK +${INK_PER_CELL}${bonus ? ` +${bonus}` : ''}`);
@@ -290,6 +293,7 @@ export function cellfillScreen() {
         draw();
       } catch (e) {
         busy = false;
+        sfx.play('error');
         toast('전송 실패: ' + (e.message || e), 4000);
         btn.disabled = false; btn.textContent = 'CONFIRM & FILL CELL ▸';
       }

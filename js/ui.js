@@ -1,8 +1,24 @@
 // 공용 UI: 프레임 크롬 · 캔버스 그리드 렌더러 · 토스트
 import { S, theme, quotaInfo } from './store.js';
 import { lum, h, targetHSL, hslToHex, gridOf, seedOf } from './game.js';
+import { sfx } from './audio.js';
 
 const app = () => document.getElementById('app');
+
+// 조작 대상별 효과음 — 화면마다 붙이지 않도록 문서 레벨 1회 위임 (위에서부터 먼저 맞는 것)
+const SFX_TARGETS = [
+  ['.tab, [data-nav]', 'nav'],          // 하단 탭바 이동
+  ['.intake', 'intake'],                // 사진 투입 영역
+  ['.btn', 'confirm'],                  // 주요 CTA (셀 채우기 · 전송 · 확정)
+  ['.link-btn, .tb-back, .tb-skip, .knob, .steps i, .lrow, .theme-card, .danger, .segtabs button, .cell-sheet, [data-act]', 'tap'],
+];
+document.addEventListener('pointerdown', e => {
+  const el = e.target;
+  if (!el?.closest) return;
+  for (const [sel, voice] of SFX_TARGETS) {
+    if (el.closest(sel)) { sfx.play(voice); return; }
+  }
+}, true);
 
 export function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -36,11 +52,12 @@ export function statusBar(right) {
   return `<div class="statusbar"><span>${time}</span><span>${right || 'ORBIT · ▮▮▮▯ · 62%'}</span></div>`;
 }
 
-export function titleBar(label, right, backAct) {
+// extra: 우측 끝에 붙는 추가 HTML (예: SKIP 버튼)
+export function titleBar(label, right, backAct, extra) {
   return `<div class="titlebar">
     ${backAct ? `<button class="tb-back" data-act="${backAct}">◂ CONTROL</button>` : ''}
     <span class="tb-label">${label}</span><span class="tb-fill"></span>
-    <span class="tb-right">${right || ''}</span></div>`;
+    <span class="tb-right">${right || ''}</span>${extra || ''}</div>`;
 }
 
 const TABS = [
@@ -86,6 +103,7 @@ export function toast(msg, ms = 2600) {
   }
   t.textContent = msg;
   t.classList.add('show');
+  sfx.play('blip');
   clearTimeout(t._h);
   t._h = setTimeout(() => t.classList.remove('show'), ms);
 }

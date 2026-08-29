@@ -1,6 +1,6 @@
 // PIXEL IN YOU — 서비스워커
 // 앱 셸: 캐시 우선 + 백그라운드 갱신 / Supabase API: 네트워크 전용
-const VERSION = 'piy-v11';
+const VERSION = 'piy-v12';
 const SHELL = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const SHELL = [
   './js/sprites.js',
   './js/store.js',
   './js/ui.js',
+  './js/audio.js',
   './js/screens/auth.js',
   './js/screens/play.js',
   './js/screens/meta.js',

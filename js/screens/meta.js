@@ -5,6 +5,7 @@ import { renderScreen, statusBar, titleBar, tabBar, drawTargetColors, applyTheme
 import { spriteHTML, THEMES, themeUnlocked } from '../sprites.js';
 import { gridOf, levelsOf, seedOf, targetHSL, STAGES } from '../game.js';
 import { loadLevelImages, drawMosaic } from './story.js';
+import { bgm, sfx, TRACKS } from '../audio.js';
 
 const pad2 = v => String(v).padStart(2, '0');
 
@@ -484,7 +485,8 @@ export function shopScreen() {
 export function settingsScreen() {
   const p = S.profile;
   const t = theme();
-  const snd = { bgm: 3, sfx: 4, ...(p.settings?.snd || {}) };
+  const snd = { bgm: 3, sfx: 4, track: 0, ...(p.settings?.snd || {}) };
+  if (!TRACKS[snd.track]) snd.track = 0;   // 테마 구성이 바뀐 경우 기본 테마로
   const tg = { vib: true, flicker: false, notify: true, streak: true, ...(p.settings?.tg || {}) };
 
   const saveSettings = async patch => {
@@ -496,7 +498,7 @@ export function settingsScreen() {
     <div class="panel pad" style="border-color:rgb(var(--ink-rgb)/.38)">
       <div class="row" style="justify-content:space-between;align-items:baseline">
         <span style="font:500 13px var(--mono);letter-spacing:.1em;color:var(--bright)">${label}</span>
-        <span class="mono11 dim">${val * 20}%</span>
+        <span class="mono11 ${val ? 'dim' : 'alert'}">${val ? val * 20 + '%' : 'MUTED'}</span>
       </div>
       <div class="steps" style="margin-top:8px" data-slider="${id}">${[0, 1, 2, 3, 4].map(i => `<i data-v="${i + 1}" class="${i < val ? 'on' : ''}"></i>`).join('')}</div>
     </div>`;
@@ -525,8 +527,18 @@ export function settingsScreen() {
       <div class="mx16 mt14 label" style="letter-spacing:.24em">CONSOLE THEME · 언제든 변경 가능</div>
       ${themeCardsHTML()}
       <div class="mx16 mt14 label" style="letter-spacing:.24em">SOUND</div>
+      <div class="mx16 mono11 dim" style="margin-top:4px;opacity:.75">켜진 칸을 다시 누르면 음소거됩니다</div>
       <div class="mx16" style="margin-top:7px;display:flex;flex-direction:column;gap:8px">
         ${sliderHTML('bgm', 'AMBIENT HUM · BGM', snd.bgm)}
+        <div class="panel pad" style="border-color:rgb(var(--ink-rgb)/.38)">
+          <div class="row" style="justify-content:space-between;align-items:baseline">
+            <span style="font:500 13px var(--mono);letter-spacing:.1em;color:var(--bright)">SIGNAL THEME</span>
+            <span class="mono11 dim">${TRACKS[snd.track]?.desc || ''}</span>
+          </div>
+          <div class="segtabs" style="margin-top:8px" id="tracks">
+            ${TRACKS.map((t, i) => `<button data-track="${i}" class="${i === snd.track ? 'on' : ''}">${t.name}</button>`).join('')}
+          </div>
+        </div>
         ${sliderHTML('sfx', 'CONSOLE SFX', snd.sfx)}
       </div>
       <div class="mx16 mt14 label" style="letter-spacing:.24em">DISPLAY &amp; ALERTS</div>
@@ -549,9 +561,22 @@ export function settingsScreen() {
 
   root.querySelectorAll('[data-slider]').forEach(el => el.addEventListener('click', async e => {
     const v = e.target?.dataset?.v; if (!v) return;
-    snd[el.dataset.slider] = +v;
+    const id = el.dataset.slider;
+    snd[id] = (snd[id] === +v) ? 0 : +v;      // 같은 칸 다시 누르면 0 (음소거)
+    if (id === 'bgm') { bgm.arm(); bgm.setLevel(snd.bgm); }
+    else { sfx.setLevel(snd.sfx); sfx.play('ok'); }   // 조절 즉시 미리듣기
     await saveSettings({ snd });
     settingsScreen();
+  }));
+  root.querySelectorAll('[data-track]').forEach(el => el.addEventListener('click', async () => {
+    const i = +el.dataset.track;
+    if (i === snd.track) return;
+    snd.track = i;
+    bgm.arm(); bgm.setTrack(i);
+    if (!snd.bgm) { snd.bgm = 3; bgm.setLevel(3); }   // 꺼져 있으면 들어볼 수 있게 켜준다
+    await saveSettings({ snd });
+    settingsScreen();
+    toast(`SIGNAL THEME — ${TRACKS[i].name}`);
   }));
   root.querySelectorAll('[data-toggle]').forEach(el => el.addEventListener('click', async () => {
     const id = el.dataset.toggle;
