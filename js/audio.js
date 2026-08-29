@@ -14,7 +14,7 @@ const midi = n => 440 * Math.pow(2, (n - 69) / 12);  // MIDI 노트 → Hz
 export const TRACKS = [
   {
     id: 'drone', name: 'DRONE', desc: '드럼 없는 앰비언트',
-    bpm: 56, swing: 0, reverb: .68, hiss: .016,
+    bpm: 56, swing: 0, reverb: .68,
     // D 리디안 — 아주 느린 2코드 왕복
     bars: [
       { bass: 38, pad: [50, 54, 57, 61, 64] }, // Dmaj9
@@ -26,13 +26,13 @@ export const TRACKS = [
       { bass: 35, pad: [47, 50, 54, 57, 61] },
       { bass: 35, pad: [47, 50, 54, 57, 61] },
     ],
-    pad:  { type: 'sawtooth', gain: .21, attack: 2.6, cutoff: [300, 880], wobble: .3, drift: .3 },
-    sub:  { gain: .46, steps: [0] },
+    pad:  { type: 'sawtooth', gain: .46, attack: 1.8, cutoff: [340, 1150], wobble: .14, drift: .3 },
+    sub:  { gain: .26, steps: [0], len: 16 },
     drum: null,
   },
   {
     id: 'signal', name: 'SIGNAL', desc: '셔플 브레이크 · 리퀴드 D&B',
-    bpm: 172, swing: .15, reverb: .34, hiss: .012,
+    bpm: 172, swing: .15, reverb: .34,
     // F# 마이너 — 9th 보이싱
     bars: [
       { bass: 42, pad: [54, 57, 61, 64, 68] }, // F#m9
@@ -53,8 +53,8 @@ export const TRACKS = [
 ];
 
 let ctx = null, master = null, wet = null, dry = null, analyser = null, noiseBuf = null;
-let comp = null, sfxBus = null, sfxLevel = 4, hissGain = null, sfxEcho = null;
-let timer = null, nextTime = 0, step = 0, bar = 0;
+let comp = null, sfxBus = null, sfxLevel = 4, sfxEcho = null;
+let timer = null, nextTime = 0, step = 0, bar = 0, opening = false;
 let level = 0, trackIx = 0, armed = false, running = false;
 
 const T = () => TRACKS[trackIx];
@@ -112,18 +112,6 @@ function build() {
   const nd = noiseBuf.getChannelData(0);
   for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
 
-  tapeHiss();
-}
-
-// 아주 낮은 테이프 히스 — CRT 험과 어울리는 바닥 질감
-function tapeHiss() {
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuf; src.loop = true;
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = .5;
-  hissGain = ctx.createGain(); hissGain.gain.value = T().hiss;
-  src.connect(bp); bp.connect(hissGain); hissGain.connect(dry);
-  src.start();
 }
 
 // ── 음색 ─────────────────────────────────────────────────
@@ -132,7 +120,7 @@ function pad(t, notes, dur, P) {
   const g = ctx.createGain();
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(P.gain, t + P.attack);
-  g.gain.setTargetAtTime(0, t + dur * .72, .6);
+  g.gain.setTargetAtTime(0, t + dur * .88, 1.1);
 
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
@@ -145,9 +133,9 @@ function pad(t, notes, dur, P) {
     const lfo = ctx.createOscillator();
     lfo.frequency.value = .1 + Math.random() * .12;
     const lg = ctx.createGain();
-    lg.gain.value = P.cutoff[1] * P.wobble;
+    lg.gain.value = Math.min(P.cutoff[0] * .55, P.cutoff[1] * P.wobble);
     lfo.connect(lg); lg.connect(lp.frequency);
-    lfo.start(t); lfo.stop(t + dur + 1.6);
+    lfo.start(t); lfo.stop(t + dur + 2.6);
   }
 
   notes.forEach((n, i) => {
@@ -161,12 +149,12 @@ function pad(t, notes, dur, P) {
         d.type = 'sine'; d.frequency.value = .06 + Math.random() * .07;
         const dg = ctx.createGain(); dg.gain.value = 16 * P.drift;
         d.connect(dg); dg.connect(o.detune);
-        d.start(t); d.stop(t + dur + 1.6);
+        d.start(t); d.stop(t + dur + 2.6);
       }
       const v = ctx.createGain();
       v.gain.value = (i === 0 ? .5 : .28) / notes.length;
       o.connect(v); v.connect(lp);
-      o.start(t); o.stop(t + dur + 1.4);
+      o.start(t); o.stop(t + dur + 2.4);
     }
   });
   lp.connect(g); g.connect(dry); g.connect(wet);
@@ -181,7 +169,7 @@ function sub(t, note, dur, vol) {
   const g = ctx.createGain();
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(vol, t + .03);
-  g.gain.setTargetAtTime(0, t + dur * .5, .22);
+  g.gain.setTargetAtTime(0, t + dur * .62, Math.max(.22, dur * .12));
   o.connect(g); g.connect(dry);
   o.start(t); o.stop(t + dur + .6);
 }
@@ -365,8 +353,13 @@ function scheduleStep(s, t) {
   const chord = tr.bars[bar % tr.bars.length];
   const dur = stepDur();
 
-  if (s === 0) pad(t, chord.pad, dur * 16, tr.pad);
-  if (tr.sub.steps.includes(s)) sub(t, chord.bass, dur * (s === 0 ? 6 : 4), tr.sub.gain);
+  if (s === 0) {
+    // 첫 마디만 어택을 줄여 재생하자마자 패드가 들리게 한다 (긴 어택은 무음 구간처럼 느껴진다)
+    const P = opening ? { ...tr.pad, attack: Math.min(tr.pad.attack, .7) } : tr.pad;
+    opening = false;
+    pad(t, chord.pad, dur * 16, P);
+  }
+  if (tr.sub.steps.includes(s)) sub(t, chord.bass, dur * (tr.sub.len || (s === 0 ? 6 : 4)), tr.sub.gain);
 
   const D = tr.drum;
   if (!D) return;
@@ -399,10 +392,10 @@ function fade(to, sec = 2.2) {
   master.gain.linearRampToValueAtTime(to, t + sec);
 }
 
-function play(fadeSec = 3) {
+function play(fadeSec = 1.2) {
   if (!ctx || running || !level) return;
   running = true;
-  step = 0; bar = 0;
+  step = 0; bar = 0; opening = true;
   nextTime = ctx.currentTime + .12;
   tick();
   timer = setInterval(tick, 25);
@@ -416,12 +409,11 @@ function stop(sec = 1.2) {
   fade(0, sec);
 }
 
-// 테마별 공간감/바닥 노이즈 반영
+// 테마별 공간감 반영
 function applyTrackMix() {
   if (!ctx) return;
   const t = ctx.currentTime;
   wet?.gain.setTargetAtTime(T().reverb, t, .3);
-  hissGain?.gain.setTargetAtTime(T().hiss, t, .3);
 }
 
 export const bgm = {
@@ -450,9 +442,9 @@ export const bgm = {
     if (!armed || !ctx) return;
     applyTrackMix();
     if (!level) return;                        // 음소거 상태면 다음 재생 때 반영
-    if (!running) { play(1.6); return; }       // 멈춰 있었다면 새 테마로 바로 시작
+    if (!running) { play(1.2); return; }       // 멈춰 있었다면 새 테마로 바로 시작
     stop(.4);                                  // 재생 중이면 크로스페이드로 교체
-    setTimeout(() => { if (level && !running) play(1.6); }, 420);
+    setTimeout(() => { if (level && !running) play(1.2); }, 420);
   },
   track: () => trackIx,
   level: () => level,
